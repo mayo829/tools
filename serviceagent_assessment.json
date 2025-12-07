@@ -1,0 +1,382 @@
+{
+  "name": "serviceagent_assessment",
+  "nodes": [
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=I want you to generate me a simple email. Only reaturn the resulting email body in html and exclude the subject and signature.\n\nHere is the full structure I want for the email contents, do not deviate or add any parts: Weather summary + alerts\n\nHere is my data in imperial units: {{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        1200,
+        -864
+      ],
+      "id": "5d43c97f-96aa-49cb-82a1-69f29a5dcea5",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o-mini"
+        },
+        "options": {}
+      },
+      "id": "cf6edd30-ba2d-4db6-b35e-22cc6dbc77f4",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "position": [
+        1184,
+        -736
+      ],
+      "typeVersion": 1.2,
+      "credentials": {
+        "openAiApi": {
+          "id": "eCreEbEZvv1OxgQK",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -192,
+        0
+      ],
+      "id": "44abaaac-ec68-4cfc-8b3e-07662b69698f",
+      "name": "8am Trigger"
+    },
+    {
+      "parameters": {
+        "format": "imperial",
+        "cityName": "={{ $json.cities }}"
+      },
+      "type": "n8n-nodes-base.openWeatherMap",
+      "typeVersion": 1,
+      "position": [
+        368,
+        0
+      ],
+      "id": "242355f5-83d7-443c-aad5-78f7f41a5bbd",
+      "name": "Get weather",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "openWeatherMapApi": {
+          "id": "8DEeevNduIoc1I0w",
+          "name": "OpenWeatherMap account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "ee04b268-ae36-4f38-a5f2-7a5cbc3fcade",
+              "leftValue": "={{ Number($json.cod) }}",
+              "rightValue": 200,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        624,
+        0
+      ],
+      "id": "268fa111-32b7-4199-8197-e7e880b30001",
+      "name": "If API call error"
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(item => {\n  const json_in = item.json;\n\n  const temp = json_in.main.temp;\n  const condition = json_in.weather[0].main;\n\n  let alert_precipitation = null;\n  let alert_temp = null;\n\n  const precipitationKeywords = [\"rain\", \"snow\", \"drizzle\", \"storm\", \"thunderstorm\"];\n  const matchedPrecipitation = precipitationKeywords.find(keyword =>\n    condition.toLowerCase().includes(keyword)\n  );\n\n  if (matchedPrecipitation) {\n    alert_precipitation = matchedPrecipitation.charAt(0).toUpperCase() + matchedPrecipitation.slice(1);\n  } else {\n    alert_precipitation = \"NO precipitation alert\";\n  }\n\n  if (temp > 90) {\n    alert_temp = \"Heat alert\";\n  } else if (temp < 32) {\n    alert_temp = \"Frost alert\";\n  } else {\n    alert_temp = \"NO temperature alert\";\n  }\n\n  return {\n    ...json_in,\n    alerts: {\n      precipitation: alert_precipitation,\n      temperature: alert_temp\n    },\n    Date: new Date(json_in.dt * 1000)\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        -272
+      ],
+      "id": "09eaadb6-b230-48eb-ba2b-690a644f1c60",
+      "name": "Weather Logic & Alert Rules"
+    },
+    {
+      "parameters": {
+        "tableId": "weather_logs",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "city",
+              "fieldValue": "={{ $json.name }}"
+            },
+            {
+              "fieldId": "temperature",
+              "fieldValue": "={{ $json.main.temp }}"
+            },
+            {
+              "fieldId": "temperature_unit",
+              "fieldValue": "Fahrenheit"
+            },
+            {
+              "fieldId": "condition",
+              "fieldValue": "={{ $json.weather[0].main }}"
+            },
+            {
+              "fieldId": "humidity",
+              "fieldValue": "={{ $json.main.humidity }}"
+            },
+            {
+              "fieldId": "wind_speed",
+              "fieldValue": "={{ $json.wind.speed }}"
+            },
+            {
+              "fieldId": "alert_type",
+              "fieldValue": "={{ JSON.stringify($json.alerts) }}"
+            },
+            {
+              "fieldId": "=raw_response",
+              "fieldValue": "={{ $json }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1152,
+        -352
+      ],
+      "id": "ae084dff-475f-48e0-a2f7-58b7fc7a17d4",
+      "name": "Create Row In Supabase",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "supabaseApi": {
+          "id": "lOVTtG4ZOWWdcIFr",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "enterlockedd@gmail.com",
+        "toEmail": "enterlockedd@gmail.com",
+        "subject": "=Daily Weather for {{ $json.name }}-{{ $json.Date }}",
+        "html": "=<html>\n  <body style=\"font-family: Arial, sans-serif; line-height: 1.5; color: #333;\">\n\n    <h2 style=\"color: #2E86AB;\">🌤 Daily Weather Report — {{$json.name}}, {{$json.sys.country}}</h2>\n    <p><b>Date/Time:</b> {{new Date($json.Date).toLocaleString()}}</p>\n\n    <!-- Alerts Section -->\n    <h3 style=\"color: #C0392B;\">⚠ Weather Alerts</h3>\n    <table style=\"width: 100%; border-collapse: collapse; margin-bottom: 20px;\">\n      <tr>\n        <td style=\"padding: 5px; font-weight: bold;\">Temperature Alert:</td>\n        <td style=\"padding: 5px; color: {{$json.alerts.temperature !== 'NO temperature alert' ? '#C0392B' : '#27AE60'}};\">\n          {{$json.alerts.temperature}}\n        </td>\n      </tr>\n      <tr style=\"background-color: #f8f8f8;\">\n        <td style=\"padding: 5px; font-weight: bold;\">Precipitation Alert:</td>\n        <td style=\"padding: 5px; color: {{$json.alerts.precipitation !== 'NO precipitation alert' ? '#C0392B' : '#27AE60'}};\">\n          {{$json.alerts.precipitation}}\n        </td>\n      </tr>\n    </table>\n\n    <!-- Weather Metrics -->\n    <h3 style=\"color: #2E86AB;\">📊 Weather Details</h3>\n    <table style=\"width: 100%; border-collapse: collapse;\">\n      <tr>\n        <td style=\"padding: 5px; font-weight: bold;\">Cloud Cover:</td>\n        <td style=\"padding: 5px;\">{{$json.clouds.all}}%</td>\n      </tr>\n      <tr style=\"background-color: #f8f8f8;\">\n        <td style=\"padding: 5px; font-weight: bold;\">Ground Level Pressure:</td>\n        <td style=\"padding: 5px;\">{{$json.main.pressure}} hPa</td>\n      </tr>\n      <tr>\n        <td style=\"padding: 5px; font-weight: bold;\">Visibility:</td>\n        <td style=\"padding: 5px;\">{{$json.visibility}} m</td>\n      </tr>\n      <tr style=\"background-color: #f8f8f8;\">\n        <td style=\"padding: 5px; font-weight: bold;\">Wind:</td>\n        <td style=\"padding: 5px;\">{{$json.wind.speed}} m/s at {{$json.wind.deg}}°</td>\n      </tr>\n      <tr>\n        <td style=\"padding: 5px; font-weight: bold;\">Sunrise:</td>\n        <td style=\"padding: 5px;\">{{new Date($json.sys.sunrise * 1000).toLocaleTimeString()}}</td>\n      </tr>\n      <tr style=\"background-color: #f8f8f8;\">\n        <td style=\"padding: 5px; font-weight: bold;\">Sunset:</td>\n        <td style=\"padding: 5px;\">{{new Date($json.sys.sunset * 1000).toLocaleTimeString()}}</td>\n      </tr>\n    </table>\n\n    <p style=\"margin-top: 20px; font-size: 0.9em; color: #666;\">\n      This weather report is generated automatically.\n    </p>\n\n  </body>\n</html>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1152,
+        -192
+      ],
+      "id": "6e9e95db-7b52-4088-a92c-68e63e1f0604",
+      "name": "Send email",
+      "webhookId": "c21b8887-d935-46ae-8d00-bbace3dba893",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "smtp": {
+          "id": "ueDa2vwc3YVwLxdO",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return { \n  cities: [\n    \"detroit\",\n    \"chicago\",\n    \"boston\"\n  ]\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -16,
+        0
+      ],
+      "id": "a61f1a2e-50c6-406d-8292-97306bef8494",
+      "name": "Set Configuration"
+    },
+    {
+      "parameters": {
+        "fromEmail": "enterlockedd@gmail.com",
+        "toEmail": "enterlockedd@gmail.com",
+        "subject": "=Daily Weather for {{ $json.city }}-{{ $json.Date }}",
+        "emailFormat": "text",
+        "text": "=There was an error fetching todays weather.\nTimestamp: {{ new Date($json.dt * 1000); }}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        816,
+        112
+      ],
+      "id": "6923b8ab-c04e-488b-974e-fa11cb12adc4",
+      "name": "API Error Handler",
+      "webhookId": "c21b8887-d935-46ae-8d00-bbace3dba893",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "smtp": {
+          "id": "ueDa2vwc3YVwLxdO",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "cities",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        176,
+        0
+      ],
+      "id": "6b18e12a-197f-4a03-9cda-2ba4b7cb7b9e",
+      "name": "Split Out"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "8am Trigger": {
+      "main": [
+        [
+          {
+            "node": "Set Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get weather": {
+      "main": [
+        [
+          {
+            "node": "If API call error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If API call error": {
+      "main": [
+        [
+          {
+            "node": "Weather Logic & Alert Rules",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "API Error Handler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Weather Logic & Alert Rules": {
+      "main": [
+        [
+          {
+            "node": "Create Row In Supabase",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        []
+      ]
+    },
+    "Set Configuration": {
+      "main": [
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        [
+          {
+            "node": "Get weather",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "b75a43cf-0be1-43aa-ae41-3bbcfb265eb4",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "e2ca78a98d02edf8576b0ab27e4481d295711972f311eecbf8dc1e39c94bf1f4"
+  },
+  "id": "gJUOlqfpYIhWbofW",
+  "tags": []
+}
