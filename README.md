@@ -44,4 +44,4 @@ node run_n8n.js
 - On the n8n home page, click Create Workflow.
 - Click the three dots (...) in the top-right corner and select Import from File.
 - Choose the service_assessment.json file (your workflow).
-- Run the workflow manually using the Run Workflow button on the first node, or let it trigger automatically via the Schedule Trigger at 8 AM.
+- Run the workflow manually using the Run Workflow button on the first node, or enable the workflow at the top by pushing the 'Inactive' button and you should see it turn active. This will trigger the workflow automatically via the Schedule Trigger at 8 AM.
